@@ -1,213 +1,289 @@
-# Archivo completo corregido: ruleta_render_from_kivy.py
-# NOTA: Inserta aquí tu lógica original de la ruleta dentro de los métodos marcados.
+"""
+Versión web (Flask) del código Kivy del usuario.
+Archivo: ruleta_render_from_kivy.py
+"""
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string, send_file
 import json
 import os
+import random
+from collections import Counter
+from io import BytesIO
 
 APP = Flask(__name__)
+ARCHIVO = "historial.json"
 
-# =============================
-# 1. HISTORIAL LOCAL
-# =============================
-HISTORIAL_FILE = "historial.json"
+# -----------------------------
+# Cargar / Guardar historial
+# -----------------------------
 
+def cargar_historial():
+    if os.path.exists(ARCHIVO):
+        try:
+            with open(ARCHIVO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
 
-def cargar_historial_local():
-    if not os.path.exists(HISTORIAL_FILE):
-        return []
-    try:
-        with open(HISTORIAL_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
+def guardar_historial_local(hist):
+    with open(ARCHIVO, "w", encoding="utf-8") as f:
+        json.dump(hist, f, indent=2, ensure_ascii=False)
 
+historial = cargar_historial()
 
-def guardar_historial_local(historial):
-    with open(HISTORIAL_FILE, "w", encoding="utf-8") as f:
-        json.dump(historial, f, indent=2, ensure_ascii=False)
+ROJOS = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
 
+# -----------------------------
+# Funciones originales
+# -----------------------------
 
-historial = cargar_historial_local()
+def calcular_docenas(lista):
+    if not lista: return "Sin datos de docenas."
+    doc = {"1D":0, "2D":0, "3D":0}
+    for n in lista:
+        if 1 <= n <= 12: doc["1D"] += 1
+        elif 13 <= n <= 24: doc["2D"] += 1
+        elif 25 <= n <= 36: doc["3D"] += 1
+    total = sum(doc.values())
+    if total == 0: return "Sin datos de docenas."
+    p = {k: round((v/total)*100) for k,v in doc.items()}
+    return f"1D {p['1D']}% // 2D {p['2D']}% // 3D {p['3D']}%"
 
-# =============================
-# 2. HTML COMPLETO (CORREGIDO)
-# =============================
+def calcular_mitad(lista):
+    if not lista: return "Sin datos de mitades."
+    mit = {"1-18":0, "19-36":0}
+    for n in lista:
+        if 1 <= n <= 18: mit["1-18"] += 1
+        elif 19 <= n <= 36: mit["19-36"] += 1
+    total = sum(mit.values())
+    if total == 0: return "Sin datos de mitades."
+    p = {k: round((v/total)*100) for k,v in mit.items()}
+    return f"1-18 {p['1-18']}% // 19-36 {p['19-36']}%"
+
+def ia_predecir():
+    if len(historial) < 6:
+        return "IA: pocos datos."
+    ultimos = [h[0] for h in historial][-10:]
+
+    doc = {"1D":0, "2D":0, "3D":0}
+    mit = {"1-18":0, "19-36":0}
+
+    for n in ultimos:
+        if 1 <= n <= 12: doc["1D"] += 1
+        elif 13 <= n <= 24: doc["2D"] += 1
+        elif 25 <= n <= 36: doc["3D"] += 1
+        if 1 <= n <= 18: mit["1-18"] += 1
+        elif 19 <= n <= 36: mit["19-36"] += 1
+
+    d_max = max(doc, key=doc.get)
+    m_max = max(mit, key=mit.get)
+
+    return f"IA Pronóstico: Docena → {d_max} | Mitad → {m_max}"
+
+def registrar_tirada(num, direccion):
+    historial.append([num, direccion])
+    guardar_historial_local(historial)
+
+def obtener_siguientes(num, direccion, cant=10):
+    return Counter(
+        [historial[i+1][0] for i in range(len(historial)-1)
+         if historial[i][0] == num and historial[i][1] == direccion]
+    ).most_common(cant)
+
+def formatear_historial(limite=100):
+    if not historial:
+        return "Historial vacío"
+
+    partes = []
+    for n, dire in historial[-limite:]:
+        d = dire.replace("➡️","D").replace("⬅️","I")
+
+        if n == 0:
+            col = f"<span style='color:green'>{n}</span>"
+        elif n in ROJOS:
+            col = f"<span style='color:red'>{n}</span>"
+        else:
+            col = f"<span style='color:white'>{n}</span>"
+
+        partes.append(f"{col}({d})")
+
+    return "Historial: " + " → ".join(partes)
+
+# -----------------------------
+# HTML — sin errores
+# -----------------------------
+
 HTML = """
-<!DOCTYPE html>
-<html lang="es">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Ruleta Kivy Render</title>
+<meta charset='utf-8'>
+<title>Ruleta Web</title>
+
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        background: #222;
-        color: #eee;
-        text-align: center;
-    }
-
-    h1 {
-        margin-top: 20px;
-        color: #fff;
-    }
-
-    .container {
-        margin: 20px auto;
-        max-width: 500px;
-        background: #333;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.5);
-    }
-
-    .input-group {
-        margin-bottom: 15px;
-    }
-
-    label {
-        display: block;
-        margin-bottom: 5px;
-        font-size: 14px;
-    }
-
-    input[type="number"] {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #555;
-        border-radius: 4px;
-        background: #111;
-        color: #fff;
-    }
-
-    button {
-        background: #28a745;
-        color: #fff;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-
-    button:hover {
-        background: #218838;
-    }
-
-    .historial {
-        margin-top: 20px;
-        max-height: 240px;
-        overflow-y: auto;
-        text-align: left;
-        padding: 10px;
-        background: #111;
-        border-radius: 4px;
-    }
-
-    .historial-entry {
-        border-bottom: 1px solid #333;
-        padding: 6px 0;
-        font-size: 14px;
-    }
-
+body{background:#222;color:#eee;font-family:Arial;margin:20px}
+.card{background:#333;padding:14px;border-radius:8px;margin-top:12px}
+.key{
+  display:inline-block;
+  width:60px;height:60px;
+  margin:6px;
+  text-align:center;
+  line-height:60px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:22px;
+  color:white;              /* ← CAMBIO QUE PEDISTE */
+}
+.green{background:#0a6}
+.red{background:#a33}
+.black{background:#444}
 </style>
+
 </head>
 <body>
-<h1>Ruleta Kivy – Web</h1>
-<div class="container">
 
-    <div class="input-group">
-        <label>Número ingresado</label>
-        <input id="numero" type="number" placeholder="Ingresa un número" />
-    </div>
+<h1>Ruleta Web</h1>
 
-    <button onclick="enviarNumero()">Enviar número</button>
-    <button style="background:#c00;margin-left:10px" onclick="limpiarHistorial()">Limpiar Historial</button>
+<div class='card'>
+  <label>Dirección:</label>
+  <button onclick="setDir('⬅️')">Izquierda</button>
+  <button onclick="setDir('➡️')">Derecha</button>
+  <div id='dirLabel' style='margin-top:6px;color:#ccc'></div>
 
-    <div class="historial" id="historial"></div>
+  <br><br>
+
+  <label>Número:</label>
+  <input id='num' style='width:100px;font-size:22px'>
+  <button onclick='registrar()'>Registrar</button>
+  <button onclick='deshacer()'>Deshacer</button>
+
+  <div id='msg' style='margin-top:8px;color:#bbb'></div>
 </div>
 
+<div class='card'>
+  <div id='hist'></div>
+  <div id='ia'></div>
+  <div id='doc'></div>
+  <div id='mit'></div>
+</div>
+
+<div class='card' id='teclado'></div>
+
 <script>
-function enviarNumero() {
-    const valor = document.getElementById("numero").value;
-    if (!valor) return alert("Ingresa un número válido");
+let direccion = "➡️";
 
-    fetch('/ingresar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: valor })
-    })
-    .then(r => r.json())
-    .then(actualizarHistorial);
+function setDir(d){
+  direccion = d;
+  document.getElementById('dirLabel').textContent = "Dirección: " + (d === "➡️" ? "Derecha" : "Izquierda");
+}
+setDir("➡️");
+
+// Crear teclado 0–36
+const T = document.getElementById('teclado');
+const ROJOS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+
+for(let i=0;i<=36;i++){
+  let b = document.createElement("div");
+  b.className = "key";
+
+  if(i==0) b.classList.add("green");
+  else if(ROJOS.includes(i)) b.classList.add("red");
+  else b.classList.add("black");
+
+  b.textContent = i;
+  b.onclick = ()=>{ document.getElementById("num").value = i };
+  T.appendChild(b);
 }
 
-function limpiarHistorial() {
-    fetch('/clear', { method: 'POST' })
-    .then(r => r.json())
-    .then(() => cargarHistorial());
+// Refrescar estado
+async function refrescar(){
+  const r = await fetch("/state");
+  const j = await r.json();
+  document.getElementById('hist').innerHTML = j.hist;
+  document.getElementById('ia').textContent = j.ia;
+  document.getElementById('doc').textContent = j.doc;
+  document.getElementById('mit').textContent = j.mit;
 }
 
-function cargarHistorial() {
-    fetch('/historial')
-        .then(r => r.json())
-        .then(actualizarHistorial);
+// Registrar número
+async function registrar(){
+  const n = document.getElementById("num").value;
+  if(n==="") return alert("Ingrese número");
+
+  const r = await fetch("/register", {
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({num:parseInt(n), direccion})
+  });
+
+  const j = await r.json();
+  document.getElementById("msg").textContent = j.mensaje;
+  document.getElementById("num").value = "";
+  refrescar();
 }
 
-function actualizarHistorial(data) {
-    const div = document.getElementById("historial");
-    div.innerHTML = "";
-    data.forEach(e => {
-        div.innerHTML += `<div class='historial-entry'>${e}</div>`;
-    });
+// Deshacer
+async function deshacer(){
+  const r = await fetch("/undo",{method:"POST"});
+  const j = await r.json();
+  document.getElementById("msg").textContent = j.mensaje;
+  refrescar();
 }
 
-cargarHistorial();
+refrescar();
 </script>
+
 </body>
 </html>
 """
 
-# =============================
-# 3. ENDPOINTS
-# =============================
+# -----------------------------
+# Rutas Flask
+# -----------------------------
+
 @APP.route("/")
-def home():
-    return HTML
+def index():
+    return render_template_string(HTML)
 
+@APP.route("/state")
+def state():
+    return jsonify({
+        "hist": formatear_historial(),
+        "ia": ia_predecir(),
+        "doc": calcular_docenas([n for n,_ in historial[-50:]]),
+        "mit": calcular_mitad([n for n,_ in historial[-50:]]),
+    })
 
-@APP.route('/ingresar', methods=['POST'])
-def ingresar():
-    global historial
+@APP.route("/register", methods=["POST"])
+def register():
     data = request.get_json()
-    numero = data.get("numero", None)
+    num = int(data["num"])
+    direccion = data["direccion"]
 
-    # Aquí integras tu lógica de ruleta real:
-    resultado = f"Ingresado número: {numero}"
+    registrar_tirada(num, direccion)
 
-    historial.append(resultado)
-    guardar_historial_local(historial)
+    sig = obtener_siguientes(num, direccion)
+    if sig:
+        txt = ", ".join([f"{n} ({c})" for n,c in sig])
+        d = "D" if direccion=="➡️" else "I"
+        return jsonify({"mensaje":f"Después de {num} ({d}): {txt}"})
+    else:
+        d = "D" if direccion=="➡️" else "I"
+        return jsonify({"mensaje":f"Sin datos para {num} ({d})."})
 
-    return jsonify(historial)
+@APP.route("/undo", methods=["POST"])
+def undo():
+    if historial:
+        n, d = historial.pop()
+        guardar_historial_local(historial)
+        d2 = "D" if d=="➡️" else "I"
+        return jsonify({"mensaje":f"Se eliminó {n} ({d2})"})
+    return jsonify({"mensaje":"Nada que deshacer."})
 
+# -----------------------------
+# Main
+# -----------------------------
 
-@APP.route('/historial')
-def get_hist():
-    return jsonify(historial)
-
-
-@APP.route('/clear', methods=['POST'])
-def clear_hist():
-    global historial
-    historial = []
-    guardar_historial_local(historial)
-    return jsonify([])
-
-# =============================
-# 4. EJECUCIÓN
-# =============================
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    APP.run(host="0.0.0.0", port=port)
+if __name__ == "__main__":
+    APP.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
