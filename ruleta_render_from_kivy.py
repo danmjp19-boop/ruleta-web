@@ -122,22 +122,87 @@ HTML = """
 <title>Ruleta Web</title>
 
 <style>
-body{background:#222;color:#eee;font-family:Arial;margin:20px}
-.card{background:#333;padding:14px;border-radius:8px;margin-top:12px}
-.key{
-  display:inline-block;
-  width:60px;height:60px;
-  margin:6px;
-  text-align:center;
-  line-height:60px;
-  border-radius:6px;
-  cursor:pointer;
-  font-size:22px;
-  color:white;              /* ← CAMBIO QUE PEDISTE */
+body{
+    background:#222;
+    color:#eee;
+    font-family:Arial;
+    margin:20px;
 }
+
+/* Tarjetas */
+.card{
+    background:#333;
+    padding:14px;
+    border-radius:8px;
+    margin-top:12px;
+}
+
+/* Teclas de números */
+.key{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:60px;
+    height:60px;
+    margin:6px;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:22px;
+    color:white;
+}
+
+/* Colores ruleta */
 .green{background:#0a6}
 .red{background:#a33}
 .black{background:#444}
+
+/* --- Diseño RESPONSIVE --- */
+
+/* Teclado como grid flexible */
+#teclado{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(55px, 1fr));
+    gap:8px;
+}
+
+/* Ajustes para celulares */
+@media (max-width: 600px){
+
+    body{margin:10px}
+
+    h1{
+        font-size:22px;
+        text-align:center;
+    }
+
+    .card{
+        padding:10px;
+    }
+
+    input{
+        width:100%!important;
+        font-size:20px;
+        margin-top:8px;
+    }
+
+    button{
+        margin-top:6px;
+        font-size:16px;
+        padding:8px 12px;
+    }
+
+    .key{
+        height:48px;
+        width:48px;
+        font-size:18px;
+        margin:4px;
+    }
+
+    #teclado{
+        grid-template-columns:repeat(auto-fit, minmax(45px, 1fr));
+        gap:6px;
+    }
+}
 </style>
 
 </head>
