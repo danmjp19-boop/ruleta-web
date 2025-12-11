@@ -1,151 +1,213 @@
-<!doctype html>
-<html>
+# Archivo completo corregido: ruleta_render_from_kivy.py
+# NOTA: Inserta aquí tu lógica original de la ruleta dentro de los métodos marcados.
+
+from flask import Flask, request, jsonify
+import json
+import os
+
+APP = Flask(__name__)
+
+# =============================
+# 1. HISTORIAL LOCAL
+# =============================
+HISTORIAL_FILE = "historial.json"
+
+
+def cargar_historial_local():
+    if not os.path.exists(HISTORIAL_FILE):
+        return []
+    try:
+        with open(HISTORIAL_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return []
+
+
+def guardar_historial_local(historial):
+    with open(HISTORIAL_FILE, "w", encoding="utf-8") as f:
+        json.dump(historial, f, indent=2, ensure_ascii=False)
+
+
+historial = cargar_historial_local()
+
+# =============================
+# 2. HTML COMPLETO (CORREGIDO)
+# =============================
+HTML = """
+<!DOCTYPE html>
+<html lang="es">
 <head>
-<meta charset='utf-8'>
-<meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>Ruleta - Web</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ruleta Kivy Render</title>
 <style>
-body{font-family:Arial;margin:16px;background:#222;color:#eee}
-.container{max-width:960px;margin:0 auto}
-.top{display:flex;justify-content:space-between;align-items:center}
-.button{padding:10px 14px;margin:6px;border-radius:6px;cursor:pointer}
-.btn-dir{padding:10px 18px;margin-right:8px}
-.key{display:inline-block;width:60px;height:60px;margin:6px;text-align:center;line-height:60px;background:#2b5;cursor:pointer;border-radius:6px}
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #222;
+        color: #eee;
+        text-align: center;
+    }
 
-/* COLORES ORIGINALES */
-.green{background:#0a6}
-.red{background:#a33}
-.card{background:#333;padding:12px;border-radius:8px}
-.small{font-size:14px;color:#ccc}
-.hist{overflow:auto;max-height:80px;padding:6px}
+    h1 {
+        margin-top: 20px;
+        color: #fff;
+    }
 
-/* --------- NUEVOS ESTILOS PARA EL TECLADO --------- */
-.key {
-    color: white !important;
-    font-weight: bold;
-}
-.key.green {
-    color: black !important; /* el 0 queda como estaba */
-}
-.key.red {
-    color: white !important; /* texto blanco sobre fondo rojo */
-}
-/* --------------------------------------------------- */
+    .container {
+        margin: 20px auto;
+        max-width: 500px;
+        background: #333;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+
+    .input-group {
+        margin-bottom: 15px;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 14px;
+    }
+
+    input[type="number"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #111;
+        color: #fff;
+    }
+
+    button {
+        background: #28a745;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    button:hover {
+        background: #218838;
+    }
+
+    .historial {
+        margin-top: 20px;
+        max-height: 240px;
+        overflow-y: auto;
+        text-align: left;
+        padding: 10px;
+        background: #111;
+        border-radius: 4px;
+    }
+
+    .historial-entry {
+        border-bottom: 1px solid #333;
+        padding: 6px 0;
+        font-size: 14px;
+    }
 
 </style>
 </head>
 <body>
-<div class='container'>
-  <div class='top'>
-    <h1>RULETA - Web</h1>
-    <div>
-      <button class='button' id='btn-export'>Exportar</button>
-      <input type='file' id='file-import' style='display:none'>
-      <button class='button' id='btn-import'>Importar</button>
-      <button class='button' id='btn-clear'>Limpiar</button>
-    </div>
-  </div>
-  <div class='card'>
-    <div>
-      <label>Dirección:</label>
-      <button class='btn-dir button' id='dir-left'>Izquierda</button>
-      <button class='btn-dir button' id='dir-right'>Derecha</button>
-    </div>
-    <div style='margin-top:12px'>
-      <label>Número:</label>
-      <input id='num-input' style='font-size:22px;width:120px;padding:8px'>
-      <button class='button' id='btn-register'>Registrar</button>
-      <button class='button' id='btn-undo'>Deshacer</button>
-    </div>
-    <div style='margin-top:8px' id='resultado' class='small'></div>
-    <div style='margin-top:8px' id='ia' class='small'></div>
-    <div style='margin-top:8px' id='docenas' class='small'></div>
-    <div style='margin-top:8px' id='mitad' class='small'></div>
-  </div>
+<h1>Ruleta Kivy – Web</h1>
+<div class="container">
 
-  <div style='margin-top:12px' class='card'>
-    <div class='hist' id='historial'></div>
-  </div>
+    <div class="input-group">
+        <label>Número ingresado</label>
+        <input id="numero" type="number" placeholder="Ingresa un número" />
+    </div>
 
-  <div style='margin-top:12px' class='card'>
-    <div id='teclado'></div>
-  </div>
+    <button onclick="enviarNumero()">Enviar número</button>
+    <button style="background:#c00;margin-left:10px" onclick="limpiarHistorial()">Limpiar Historial</button>
+
+    <div class="historial" id="historial"></div>
 </div>
 
 <script>
-let direccion = '➡️';
+function enviarNumero() {
+    const valor = document.getElementById("numero").value;
+    if (!valor) return alert("Ingresa un número válido");
 
-document.getElementById('dir-left').addEventListener('click', ()=>{ direccion='⬅️'; updateDir(); });
-document.getElementById('dir-right').addEventListener('click', ()=>{ direccion='➡️'; updateDir(); });
-function updateDir(){ document.getElementById('resultado').textContent = 'Dirección: ' + (direccion==='➡️'? 'Derecha':'Izquierda'); }
-updateDir();
-
-// teclado 0-36
-const teclado = document.getElementById('teclado');
-for(let i=0;i<37;i++){
-  let b = document.createElement('button');
-  b.className='key';
-  if(i==0) b.classList.add('green');
-  else if([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(i)) b.classList.add('red');
-  else b.style.background='#444';
-  b.textContent = i;
-  b.addEventListener('click', ()=>{ document.getElementById('num-input').value = i; });
-  teclado.appendChild(b);
+    fetch('/ingresar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: valor })
+    })
+    .then(r => r.json())
+    .then(actualizarHistorial);
 }
 
-async function refresh(){
-  const resp = await fetch('/state');
-  const j = await resp.json();
-  document.getElementById('historial').innerHTML = j.hist;
-  document.getElementById('ia').textContent = j.ia;
-  document.getElementById('docenas').textContent = j.docenas;
-  document.getElementById('mitad').textContent = j.mitad;
+function limpiarHistorial() {
+    fetch('/clear', { method: 'POST' })
+    .then(r => r.json())
+    .then(() => cargarHistorial());
 }
 
-document.getElementById('btn-register').addEventListener('click', async ()=>{
-  const n = document.getElementById('num-input').value;
-  if(n==='') return alert('Ingrese número');
-  const resp = await fetch('/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({num:parseInt(n), direccion:direccion})});
-  const j = await resp.json();
-  document.getElementById('resultado').textContent = j.mensaje;
-  document.getElementById('num-input').value='';
-  refresh();
-});
+function cargarHistorial() {
+    fetch('/historial')
+        .then(r => r.json())
+        .then(actualizarHistorial);
+}
 
-document.getElementById('btn-undo').addEventListener('click', async ()=>{
-  const resp = await fetch('/undo', {method:'POST'});
-  const j = await resp.json();
-  document.getElementById('resultado').textContent = j.mensaje;
-  refresh();
-});
+function actualizarHistorial(data) {
+    const div = document.getElementById("historial");
+    div.innerHTML = "";
+    data.forEach(e => {
+        div.innerHTML += `<div class='historial-entry'>${e}</div>`;
+    });
+}
 
-document.getElementById('btn-clear').addEventListener('click', async ()=>{
-  if(!confirm('Borrar todo el historial?')) return;
-  const resp = await fetch('/clear', {method:'POST'});
-  const j = await resp.json();
-  document.getElementById('resultado').textContent = j.mensaje;
-  refresh();
-});
-
-document.getElementById('btn-export').addEventListener('click', ()=>{
-  window.location.href = '/export';
-});
-
-document.getElementById('btn-import').addEventListener('click', ()=>{ document.getElementById('file-import').click(); });
-
-document.getElementById('file-import').addEventListener('change', async (e)=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  const fd = new FormData();
-  fd.append('file', f);
-  const resp = await fetch('/import', {method:'POST', body:fd});
-  const j = await resp.json();
-  document.getElementById('resultado').textContent = j.mensaje;
-  refresh();
-});
-
-// inicial
-refresh();
+cargarHistorial();
 </script>
 </body>
 </html>
+"""
+
+# =============================
+# 3. ENDPOINTS
+# =============================
+@APP.route("/")
+def home():
+    return HTML
+
+
+@APP.route('/ingresar', methods=['POST'])
+def ingresar():
+    global historial
+    data = request.get_json()
+    numero = data.get("numero", None)
+
+    # Aquí integras tu lógica de ruleta real:
+    resultado = f"Ingresado número: {numero}"
+
+    historial.append(resultado)
+    guardar_historial_local(historial)
+
+    return jsonify(historial)
+
+
+@APP.route('/historial')
+def get_hist():
+    return jsonify(historial)
+
+
+@APP.route('/clear', methods=['POST'])
+def clear_hist():
+    global historial
+    historial = []
+    guardar_historial_local(historial)
+    return jsonify([])
+
+# =============================
+# 4. EJECUCIÓN
+# =============================
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    APP.run(host="0.0.0.0", port=port)
